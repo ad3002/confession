@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Body, Form, Request
 from motor.motor_asyncio import AsyncIOMotorDatabase
-from ..models import UserCreate, UserInDB, UserResponse, UserLogin
+from ..models import UserCreate, UserInDB, LoginResponse, UserResponse, UserLogin
 from ..config import get_settings
 from ..database import get_db
 from passlib.context import CryptContext
@@ -8,9 +8,14 @@ from datetime import datetime, timedelta
 import jwt
 import re
 from typing import Annotated
+import logging
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Add logging configuration
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 def create_access_token(user_id: str) -> str:
     settings = get_settings()
@@ -82,7 +87,7 @@ async def register(user: UserCreate, db: AsyncIOMotorDatabase = Depends(get_db))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Database error")
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login(
     request: Request,
     db: AsyncIOMotorDatabase = Depends(get_db)
@@ -92,11 +97,13 @@ async def login(
         json_data = await request.json()
         nickname = json_data.get("nickname")
         password = json_data.get("password")
+        logger.debug(f"Received JSON login attempt for user: {nickname}")
     except:
         # If not JSON, try form data
         form_data = await request.form()
         nickname = form_data.get("nickname")
         password = form_data.get("password")
+        logger.debug(f"Received Form login attempt for user: {nickname}")
 
     if not nickname or not password:
         raise HTTPException(
@@ -123,11 +130,15 @@ async def login(
     
     # Generate token
     token = create_access_token(str(user["_id"]))
+    logger.debug(f"Generated token for user {nickname}: {token}")
     
-    # Return response
-    return {
+    # Create response
+    response = {
         "id": str(user["_id"]),
         "nickname": user["nickname"],
         "photo_url": user.get("photo_url"),
         "token": token
     }
+    logger.debug(f"Sending response: {response}")
+    
+    return response

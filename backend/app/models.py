@@ -1,3 +1,4 @@
+import token
 from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Annotated
 from datetime import datetime
@@ -104,6 +105,14 @@ class UserResponse(BaseModel):
     id: str
     nickname: str
     photo_url: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    id: str
+    nickname: str
+    photo_url: Optional[str] = None
+    token: str
+
 
 class NoteResponse(BaseModel):
     id: str

@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
 
 export function middleware(request) {
-    const token = request.cookies.get('token');
+    // Изменим получение токена и добавим логирование
+    const token = request.cookies.get('token')?.value;
+    console.log('Middleware token:', token);
+    
     const isAuthPage = request.nextUrl.pathname === '/';
     
-    // Redirect to login if no token and trying to access protected routes
     if (!token && !isAuthPage) {
+        console.log('No token, redirecting to login');
         return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Redirect to profile if already logged in and trying to access auth page
     if (token && isAuthPage) {
+        console.log('Has token, redirecting to profile');
         return NextResponse.redirect(new URL('/profile', request.url));
     }
 

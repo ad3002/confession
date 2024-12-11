@@ -1,14 +1,12 @@
 'use client';
 import { useState } from 'react';
 import { api } from '@/api';
-import { useRouter } from 'next/navigation';
 
 export default function AuthForm() {
     const [isLogin, setIsLogin] = useState(true);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
-    const router = useRouter();
 
     const validateForm = (nickname, password) => {
         if (!nickname || nickname.length < 3) {
@@ -30,7 +28,6 @@ export default function AuthForm() {
         const password = formData.get('password');
 
         try {
-            // Validate form before API call
             validateForm(nickname, password);
 
             if (isLogin) {
@@ -40,14 +37,9 @@ export default function AuthForm() {
             }
             
             setSuccess(true);
-            router.refresh(); // Refresh the page data
             
-            // Redirect after a short delay
-            setTimeout(() => {
-                router.push('/profile');
-                router.refresh();
-            }, 1500);
         } catch (err) {
+            console.error('Auth error:', err);
             if (err.response?.status === 400) {
                 setError(err.response.data.detail || 'Invalid credentials');
             } else if (err.response?.status === 409) {

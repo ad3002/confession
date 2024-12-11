@@ -3,21 +3,114 @@ import Cookies from 'js-cookie';
 
 export class ApiClient {
     constructor(baseURL = 'http://localhost:8000/api') {
+        console.log('ApiClient initialized with baseURL:', baseURL);
         this.client = axios.create({
             baseURL,
             headers: {
                 'Content-Type': 'application/json',
             },
+            withCredentials: true // Enable sending cookies with requests
         });
 
-        // Update token handling in interceptor
+        // Добавляем логирование при инициализации
+        const token = this.getToken();
+        console.log('Initial token:', token);
+        if (token) {
+            this.setAxiosAuthHeader(token);
+        }
+
+        // Улучшенный request interceptor
         this.client.interceptors.request.use((config) => {
-            const token = Cookies.get('token');
+            const token = this.getToken();
+            console.log('Request interceptor - Token:', token);
+            console.log('Request headers:', config.headers);
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
             }
             return config;
+        }, (error) => {
+            return Promise.reject(error);
         });
+
+        // Улучшенный response interceptor
+        this.client.interceptors.response.use(
+            (response) => {
+                console.log('Response interceptor - Status:', response.status);
+                return response;
+            },
+            (error) => {
+                console.error('Response error:', error.response?.status, error.message);
+                if (error.response?.status === 401) {
+                    console.log('Unauthorized, clearing token');
+                    this.clearToken();
+                    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/')) {
+                        window.location.href = '/';
+                    }
+                }
+                return Promise.reject(error);
+            }
+        );
+    }
+
+    // Добавляем метод для редиректа
+    handleRedirect(path) {
+        console.log('Handling redirect to:', path);
+        if (typeof window !== 'undefined') {
+            // Don't use window.location for client-side navigation
+            if (window.router) {
+                console.log('Using Next.js router for navigation');
+                window.router.replace(path);
+            } else {
+                console.log('Fallback to window.location');
+                window.location.replace(path);
+            }
+        }
+    }
+
+    setAxiosAuthHeader(token) {
+        this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+
+    removeAxiosAuthHeader() {
+        delete this.client.defaults.headers.common['Authorization'];
+    }
+
+    // Централизованное управление токеном
+    getToken() {
+        return Cookies.get('token');
+    }
+
+    setToken(token) {
+        console.log('Setting token:', token ? 'token present' : 'no token');
+        if (!token) return this.clearToken();
+        
+        Cookies.set('token', token, { 
+            expires: 7,
+            path: '/',
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax'
+        });
+        
+        this.setAxiosAuthHeader(token);
+        console.log('Token set in cookie and headers');
+    }
+
+    clearToken() {
+        console.log('Clearing token');
+        Cookies.remove('token', { path: '/' });
+        this.removeAxiosAuthHeader();
+        console.log('Token cleared from cookie and headers');
+    }
+
+    _handleAuthResponse(response) {
+        if (response.data.token) {
+            this.setToken(response.data.token);
+        }
+    }
+
+    logout() {
+        this.clearToken();
+        this.handleRedirect('/');
     }
 
     /**
@@ -32,6 +125,9 @@ export class ApiClient {
             password,
         });
         this._handleAuthResponse(response);
+        
+        // Remove delay and use direct navigation
+        this.handleRedirect('/profile');
         return response.data;
     }
 
@@ -42,11 +138,17 @@ export class ApiClient {
      * @returns {Promise<{id: string, nickname: string, photo_url: string|null, token: string}>}
      */
     async login(nickname, password) {
+        console.log('Login attempt for:', nickname);
         const response = await this.client.post('/auth/login', {
             nickname,
             password,
         });
+        console.log('Login response:', response.status, response.data.token ? 'token received' : 'no token');
         this._handleAuthResponse(response);
+        console.log('Login successful, redirecting...');
+        
+        // Remove delay and use direct navigation
+        this.handleRedirect('/profile');
         return response.data;
     }
 
@@ -207,17 +309,15 @@ export class ApiClient {
     // Update helper methods
     _handleAuthResponse(response) {
         if (response.data.token) {
-            // Store token in HTTP-only cookie
-            Cookies.set('token', response.data.token, { 
-                expires: 7, // 7 days
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict'
-            });
+            this.setToken(response.data.token);
         }
     }
 
     logout() {
-        Cookies.remove('token');
+        this.clearToken();
+        if (typeof window !== 'undefined') {
+            window.location.href = '/';
+        }
     }
 }
 
