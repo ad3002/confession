@@ -10,6 +10,15 @@ export default function AuthForm() {
     const [success, setSuccess] = useState(false);
     const router = useRouter();
 
+    const validateForm = (nickname, password) => {
+        if (!nickname || nickname.length < 3) {
+            throw new Error('Nickname must be at least 3 characters long');
+        }
+        if (!password || password.length < 8) {
+            throw new Error('Password must be at least 8 characters long');
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
@@ -21,18 +30,34 @@ export default function AuthForm() {
         const password = formData.get('password');
 
         try {
+            // Validate form before API call
+            validateForm(nickname, password);
+
             if (isLogin) {
                 await api.login(nickname, password);
             } else {
                 await api.register(nickname, password);
             }
+            
             setSuccess(true);
-            // Short delay to show success message before redirect
+            router.refresh(); // Refresh the page data
+            
+            // Redirect after a short delay
             setTimeout(() => {
                 router.push('/profile');
-            }, 1000);
+                router.refresh();
+            }, 1500);
         } catch (err) {
-            setError(err.response?.data?.detail || 'Something went wrong');
+            if (err.response?.status === 400) {
+                setError(err.response.data.detail || 'Invalid credentials');
+            } else if (err.response?.status === 409) {
+                setError('Nickname already exists');
+            } else if (err.message) {
+                setError(err.message);
+            } else {
+                setError('An unexpected error occurred');
+            }
+            setSuccess(false);
         } finally {
             setLoading(false);
         }
